@@ -1,0 +1,17 @@
+name = Quiz Export
+description = API module for export quizes
+package = Mentorix modules
+core = 7.x
+
+dependencies[] = quiz
+dependencies[] = long_answer
+dependencies[] = matching
+dependencies[] = multichoice
+dependencies[] = quiz_ddlines
+dependencies[] = quiz_directions
+dependencies[] = quiz_question
+dependencies[] = scale
+dependencies[] = short_answer
+dependencies[] = truefalse
+
+files[] = view/handlers/quiz_export_views_handler_field_download_link.inc

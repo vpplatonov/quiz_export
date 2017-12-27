@@ -1,0 +1,160 @@
+<?php
+
+/**
+ * @File
+ * Export quiz main module
+ * created: 25.11.2017
+ */
+
+define('QUIZ_NODE_TYPE', 'quiz');
+define('QUIZ_EXPORT_CORRECT_ANSWER_MARK', '*');
+define('QUIZ_EXPORT_DATA_FORMAT', 'd-m-Y');
+define('QUIZ_EXPORT_EXCEL_EXT', 'xlsx');
+define('QUIZ_EXPORT_EXCEL_TYPE', 'Excel2007');
+define('QUIZ_EXPORT_VIEWS_DIR', drupal_get_path('module', 'quiz_export') . '/view');
+
+/**
+ * Implements hook_views_api().
+ */
+function quiz_export_views_api() {
+  return array(
+    'api' => 2,
+    'path' => QUIZ_EXPORT_VIEWS_DIR,
+  );
+}
+
+/**
+ * Implements hook_menu().
+ *
+ * @see quiz_permission().
+ */
+function quiz_export_menu() {
+  $items = array();
+
+  $items['admin/quiz/%/export'] = array(
+    'access arguments' => array('access quiz'),
+    'page callback' => 'quiz_export_excel',
+    'page arguments' => array(2),
+    'title' => 'Export a quiz',
+    'file' => 'includes/quiz_export.excel.inc',
+    'description' => 'Export a quiz.',
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Helper to build download link in content views.
+ *
+ * @param int $quiz_id
+ *   Node ID for quiz node type.
+ *
+ * @return string
+ *   Link for render in views.
+ */
+function quiz_export_download_link($quiz_id) {
+  $link = l('Export', 'admin/quiz/' . $quiz_id . '/export', array('attributes' => array('class' => array('button'))));
+
+  return $link;
+}
+
+/**
+ * Helper to create header to download file.
+ *
+ * @param string $file_name_ext
+ *   File name with extensions divided by point.
+ */
+function quiz_export_file_header($file_name_ext) {
+  header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  header('Content-Disposition: attachment;filename="' . $file_name_ext . '"');
+  header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+  header('Cache-Control: post-check=0, pre-check=0', FALSE);
+  header('Pragma: no-cache');
+}
+
+/**
+ * Helper for xls column Name.
+ *
+ * @return array
+ *   Excel column header Name.
+ */
+function quiz_export_xls_mapper() {
+
+  return array(
+    'A' => t('Type'),
+    'B' => t('Question Title'),
+    'C' => t('Question description'),
+    'D' => t('Answer'),
+    'E' => t('Matching/correct answer'),
+    'F' => t('Feedback if chosen'),
+    'G' => t('Feedback if not chosen'),
+  );
+}
+
+/**
+ * Helper to get type of Question & List.
+ *
+ * @param object $quiz
+ *   Quiz node
+ *
+ * @return array
+ *   List of questions
+ *
+ * @see quiz_get_questions()
+ */
+function quiz_export_quiz_questions($quiz) {
+  $status = NODE_PUBLISHED;
+  $sql = <<<__sql_question
+    SELECT q.nid, q.vid, q.type, qnr.weight, nr.title, body.body_value as description, body.body_format as bformat
+      FROM quiz_node_relationship as qnr
+      LEFT JOIN node as q ON q.vid = qnr.child_vid
+      JOIN node_revision as nr ON nr.nid = q.nid
+      LEFT JOIN field_data_body as body ON body.entity_type = 'node' AND body.entity_id = q.nid AND body.revision_id = q.vid
+    WHERE qnr.parent_vid = {$quiz->vid} AND qnr.parent_nid = {$quiz->nid} AND q.status = {$status}
+    ORDER BY qnr.weight
+__sql_question;
+
+  return db_query($sql)->fetchAll();
+}
+
+/**
+ * Helper to get Answers properties.
+ *
+ * @return array
+ */
+function quiz_export_answer_properties_map() {
+
+  return array(
+    'long_answer' => array('rubric'),
+    'multichoice' => array('alternatives'),
+    'matching' => array('match'),
+    'short_answer' => array('correct_answer'),
+    'truefalse' => array('correct_answer'),
+    'scale' => array('answer'),
+    'quiz_ddlines' => array('max_score'),
+    'quiz_directions' => array('max_score'),
+  );
+}
+
+/**
+ * Helper for debug purposes: get question all types for export procedure.
+ *
+ * @return mixed
+ */
+function quiz_export_get_all_type_question() {
+
+  $qtypes = "'" . implode("','", array_keys(_quiz_get_question_types())) . "'";
+  $status = NODE_PUBLISHED;
+  $sql = <<<__sql_question
+    SELECT q.nid, q.vid, q.type, q.status, q.title, body.body_value as description, body.body_format as bformat
+      FROM node as n
+      LEFT JOIN quiz_node_relationship as qnr ON qnr.parent_nid = n.nid AND qnr.parent_vid = n.vid
+      LEFT JOIN node as q ON q.nid = qnr.child_nid AND q.vid = qnr.child_vid
+      LEFT JOIN field_data_body as body ON body.entity_type = 'node' AND body.entity_id = q.nid AND body.revision_id = q.vid
+    WHERE q.type IN ({$qtypes}) AND n.status = {$status}
+    GROUP BY q.type
+__sql_question;
+
+  return db_query($sql)->fetchAll();
+}
